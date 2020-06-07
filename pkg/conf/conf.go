@@ -15,6 +15,7 @@ type database struct {
 	Name        string
 	TablePrefix string
 	DBFile      string
+	Port        int
 }
 
 // system 系统通用配置
@@ -24,6 +25,12 @@ type system struct {
 	Debug         bool
 	SessionSecret string
 	HashIDSalt    string
+}
+
+type ssl struct {
+	CertPath string `validate:"omitempty,required"`
+	KeyPath  string `validate:"omitempty,required"`
+	Listen   string `validate:"required"`
 }
 
 // slave 作为slave存储端配置
@@ -112,6 +119,7 @@ func Init(path string) {
 	sections := map[string]interface{}{
 		"Database":  DatabaseConfig,
 		"System":    SystemConfig,
+		"SSL":       SSLConfig,
 		"Captcha":   CaptchaConfig,
 		"Redis":     RedisConfig,
 		"Thumbnail": ThumbConfig,

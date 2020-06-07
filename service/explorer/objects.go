@@ -146,6 +146,11 @@ func (service *ItemCompressService) CreateCompressTask(c *gin.Context) serialize
 		return serializer.Err(serializer.CodeGroupNotAllowed, "当前用户组无法进行此操作", nil)
 	}
 
+	// 补齐压缩文件扩展名（如果没有）
+	if !strings.HasSuffix(service.Name, ".zip") {
+		service.Name += ".zip"
+	}
+
 	// 存放目录是否存在，是否重名
 	if exist, _ := fs.IsPathExist(service.Dst); !exist {
 		return serializer.Err(serializer.CodeNotFound, "存放路径不存在", nil)
@@ -264,7 +269,7 @@ func (service *ItemIDService) Delete(ctx context.Context, c *gin.Context) serial
 
 	// 删除对象
 	items := service.Raw()
-	err = fs.Delete(ctx, items.Dirs, items.Items)
+	err = fs.Delete(ctx, items.Dirs, items.Items, false)
 	if err != nil {
 		return serializer.Err(serializer.CodeNotSet, err.Error(), err)
 	}

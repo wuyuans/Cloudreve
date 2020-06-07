@@ -5,6 +5,7 @@ import model "github.com/HFO4/cloudreve/models"
 // SiteConfig 站点全局设置序列
 type SiteConfig struct {
 	SiteName           string `json:"title"`
+	SiteICPId          string `json:"siteICPId"`
 	LoginCaptcha       bool   `json:"loginCaptcha"`
 	RegCaptcha         bool   `json:"regCaptcha"`
 	ForgetCaptcha      bool   `json:"forgetCaptcha"`
@@ -13,8 +14,10 @@ type SiteConfig struct {
 	DefaultTheme       string `json:"defaultTheme"`
 	HomepageViewMethod string `json:"home_view_method"`
 	ShareViewMethod    string `json:"share_view_method"`
-	Authn              bool   `json:"authn"'`
+	Authn              bool   `json:"authn"`
 	User               User   `json:"user"`
+	UseReCaptcha       bool   `json:"captcha_IsUseReCaptcha"`
+	ReCaptchaKey       string `json:"captcha_ReCaptchaKey"`
 }
 
 type task struct {
@@ -62,6 +65,7 @@ func BuildSiteConfig(settings map[string]string, user *model.User) Response {
 	res := Response{
 		Data: SiteConfig{
 			SiteName:           checkSettingValue(settings, "siteName"),
+			SiteICPId:          checkSettingValue(settings, "siteICPId"),
 			LoginCaptcha:       model.IsTrueVal(checkSettingValue(settings, "login_captcha")),
 			RegCaptcha:         model.IsTrueVal(checkSettingValue(settings, "reg_captcha")),
 			ForgetCaptcha:      model.IsTrueVal(checkSettingValue(settings, "forget_captcha")),
@@ -72,6 +76,8 @@ func BuildSiteConfig(settings map[string]string, user *model.User) Response {
 			ShareViewMethod:    checkSettingValue(settings, "share_view_method"),
 			Authn:              model.IsTrueVal(checkSettingValue(settings, "authn_enabled")),
 			User:               userRes,
+			UseReCaptcha:       model.IsTrueVal(checkSettingValue(settings, "captcha_IsUseReCaptcha")),
+			ReCaptchaKey:       checkSettingValue(settings, "captcha_ReCaptchaKey"),
 		}}
 	return res
 }

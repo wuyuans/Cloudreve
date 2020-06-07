@@ -32,7 +32,7 @@ type Object struct {
 // Rename 重命名对象
 func (fs *FileSystem) Rename(ctx context.Context, dir, file []uint, new string) (err error) {
 	// 验证新名字
-	if !fs.ValidateLegalName(ctx, new) || !fs.ValidateExtension(ctx, new) {
+	if !fs.ValidateLegalName(ctx, new) || (len(file) > 0 && !fs.ValidateExtension(ctx, new)) {
 		return ErrIllegalObjectName
 	}
 
@@ -131,8 +131,8 @@ func (fs *FileSystem) Move(ctx context.Context, dirs, files []uint, src, dst str
 	return err
 }
 
-// Delete 递归删除对象
-func (fs *FileSystem) Delete(ctx context.Context, dirs, files []uint) error {
+// Delete 递归删除对象, force 为 true 时强制删除文件记录，忽略物理删除是否成功
+func (fs *FileSystem) Delete(ctx context.Context, dirs, files []uint, force bool) error {
 	// 已删除的总容量,map用于去重
 	var deletedStorage = make(map[uint]uint64)
 	var totalStorage = make(map[uint]uint64)
@@ -182,7 +182,12 @@ func (fs *FileSystem) Delete(ctx context.Context, dirs, files []uint) error {
 		totalStorage[fs.FileTarget[i].ID] = fs.FileTarget[i].Size
 		allFileIDs = append(allFileIDs, fs.FileTarget[i].ID)
 	}
-	// TODO 用户自主选择是否强制删除
+
+	// 如果强制删除，则将全部文件视为删除成功
+	if force {
+		deletedFileIDs = allFileIDs
+		deletedStorage = totalStorage
+	}
 
 	// 删除文件记录
 	err = model.DeleteFileByIDs(deletedFileIDs)
@@ -278,6 +283,38 @@ func (fs *FileSystem) List(ctx context.Context, dirPath string, pathProcessor fu
 	childFiles, _ = folder.GetChildFiles()
 
 	return fs.listObjects(ctx, parentPath, childFiles, childFolders, pathProcessor), nil
+}
+
+// ListPhysical 列出存储策略中的外部目录
+// TODO:测试
+func (fs *FileSystem) ListPhysical(ctx context.Context, dirPath string) ([]Object, error) {
+	if err := fs.DispatchHandler(); fs.Policy == nil || err != nil {
+		return nil, ErrUnknownPolicyType
+	}
+
+	// 存储策略不支持列取时，返回空结果
+	if !fs.Policy.CanStructureBeListed() {
+		return nil, nil
+	}
+
+	// 列取路径
+	objects, err := fs.Handler.List(ctx, dirPath, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		folders []model.Folder
+	)
+	for _, object := range objects {
+		if object.IsDir {
+			folders = append(folders, model.Folder{
+				Name: object.Name,
+			})
+		}
+	}
+
+	return fs.listObjects(ctx, dirPath, nil, folders, nil), nil
 }
 
 func (fs *FileSystem) listObjects(ctx context.Context, parent string, files []model.File, folders []model.Folder, pathProcessor func(string) string) []Object {

@@ -49,6 +49,8 @@ func InitSlaveRouter() *gin.Engine {
 		v3.GET("thumb/:path", controllers.SlaveThumb)
 		// 删除文件
 		v3.POST("delete", controllers.SlaveDelete)
+		// 列出文件
+		v3.POST("list", controllers.SlaveList)
 	}
 	return r
 }
@@ -80,6 +82,7 @@ func InitMasterRouter() *gin.Engine {
 		静态资源
 	*/
 	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/"})))
+	r.Use(middleware.InjectSiteInfo())
 	r.Use(static.Serve("/", bootstrap.StaticFS))
 	r.GET("manifest.json", controllers.Manifest)
 
@@ -218,6 +221,12 @@ func InitMasterRouter() *gin.Engine {
 				middleware.COSCallbackAuth(),
 				controllers.COSCallback,
 			)
+			// AWS S3策略上传回调
+			callback.GET(
+				"s3/:key",
+				middleware.S3CallbackAuth(),
+				controllers.S3Callback,
+			)
 		}
 
 		// 分享相关
@@ -274,6 +283,8 @@ func InitMasterRouter() *gin.Engine {
 				middleware.ShareCanPreview(),
 				controllers.ShareThumb,
 			)
+			// 搜索公共分享
+			v3.Group("share").GET("search", controllers.SearchShare)
 		}
 
 		// 需要登录保护的
@@ -363,6 +374,9 @@ func InitMasterRouter() *gin.Engine {
 					file.GET("preview/:id", controllers.AdminGetFile)
 					// 删除
 					file.POST("delete", controllers.AdminDeleteFile)
+					// 列出用户或外部文件系统目录
+					file.GET("folders/:type/:id/*path",
+						controllers.AdminListFolders)
 				}
 
 				share := admin.Group("share")
@@ -387,6 +401,8 @@ func InitMasterRouter() *gin.Engine {
 					task.POST("list", controllers.AdminListTask)
 					// 删除
 					task.POST("delete", controllers.AdminDeleteTask)
+					// 新建文件导入任务
+					task.POST("import", controllers.AdminCreateImportTask)
 				}
 
 			}
@@ -436,6 +452,8 @@ func InitMasterRouter() *gin.Engine {
 				file.GET("upload/credential", controllers.GetUploadCredential)
 				// 更新文件
 				file.PUT("update/:id", controllers.PutContent)
+				// 创建空白文件
+				file.POST("create", controllers.CreateFile)
 				// 创建文件下载会话
 				file.PUT("download/:id", controllers.CreateDownloadSession)
 				// 预览文件
@@ -504,8 +522,6 @@ func InitMasterRouter() *gin.Engine {
 				share.POST("", controllers.CreateShare)
 				// 列出我的分享
 				share.GET("", controllers.ListShare)
-				// 搜索公共分享
-				share.GET("search", controllers.SearchShare)
 				// 更新分享属性
 				share.PATCH(":id",
 					middleware.ShareAvailable(),

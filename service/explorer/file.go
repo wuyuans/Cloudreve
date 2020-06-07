@@ -13,15 +13,18 @@ import (
 	"github.com/HFO4/cloudreve/pkg/serializer"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // SingleFileService 对单文件进行操作的五福，path为文件完整路径
 type SingleFileService struct {
-	Path string `uri:"path" binding:"required,min=1,max=65535"`
+	Path string `uri:"path" json:"path" binding:"required,min=1,max=65535"`
 }
 
 // FileIDService 通过文件ID对文件进行操作的服务
@@ -54,6 +57,63 @@ type SlaveFileService struct {
 // SlaveFilesService 从机多文件相关服务
 type SlaveFilesService struct {
 	Files []string `json:"files" binding:"required,gt=0"`
+}
+
+// SlaveListService 从机列表服务
+type SlaveListService struct {
+	Path      string `json:"path" binding:"required,min=1,max=65535"`
+	Recursive bool   `json:"recursive"`
+}
+
+// New 创建新文件
+func (service *SingleFileService) Create(c *gin.Context) serializer.Response {
+	// 创建文件系统
+	fs, err := filesystem.NewFileSystemFromContext(c)
+	if err != nil {
+		return serializer.Err(serializer.CodePolicyNotAllowed, err.Error(), err)
+	}
+	defer fs.Recycle()
+
+	// 上下文
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 给文件系统分配钩子
+	fs.Use("BeforeUpload", filesystem.HookValidateFile)
+	fs.Use("AfterUpload", filesystem.GenericAfterUpload)
+
+	// 上传空文件
+	err = fs.Upload(ctx, local.FileStream{
+		File:        ioutil.NopCloser(strings.NewReader("")),
+		Size:        0,
+		VirtualPath: path.Dir(service.Path),
+		Name:        path.Base(service.Path),
+	})
+	if err != nil {
+		return serializer.Err(serializer.CodeUploadFailed, err.Error(), err)
+	}
+
+	return serializer.Response{
+		Code: 0,
+	}
+}
+
+// List 列出从机上的文件
+func (service *SlaveListService) List(c *gin.Context) serializer.Response {
+	// 创建文件系统
+	fs, err := filesystem.NewAnonymousFileSystem()
+	if err != nil {
+		return serializer.Err(serializer.CodePolicyNotAllowed, err.Error(), err)
+	}
+	defer fs.Recycle()
+
+	objects, err := fs.Handler.List(context.Background(), service.Path, service.Recursive)
+	if err != nil {
+		return serializer.Err(serializer.CodeIOFailed, "无法列取文件", err)
+	}
+
+	res, _ := json.Marshal(objects)
+	return serializer.Response{Data: string(res)}
 }
 
 // DownloadArchived 下載已打包的多文件

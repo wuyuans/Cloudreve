@@ -402,3 +402,25 @@ func AdminDeleteTask(c *gin.Context) {
 		c.JSON(200, ErrorResponse(err))
 	}
 }
+
+// AdminCreateImportTask 新建文件导入任务
+func AdminCreateImportTask(c *gin.Context) {
+	var service admin.ImportTaskService
+	if err := c.ShouldBindJSON(&service); err == nil {
+		res := service.Create(c, CurrentUser(c))
+		c.JSON(200, res)
+	} else {
+		c.JSON(200, ErrorResponse(err))
+	}
+}
+
+// AdminListFolders 列出用户或外部文件系统目录
+func AdminListFolders(c *gin.Context) {
+	var service admin.ListFolderService
+	if err := c.ShouldBindUri(&service); err == nil {
+		res := service.List(c)
+		c.JSON(200, res)
+	} else {
+		c.JSON(200, ErrorResponse(err))
+	}
+}

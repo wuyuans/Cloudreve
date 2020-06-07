@@ -18,6 +18,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -44,6 +47,80 @@ type Driver struct {
 	Policy     *model.Policy
 	Client     *cossdk.Client
 	HTTPClient request.Client
+}
+
+// List 列出COS文件
+func (handler Driver) List(ctx context.Context, base string, recursive bool) ([]response.Object, error) {
+	// 初始化列目录参数
+	opt := &cossdk.BucketGetOptions{
+		Prefix:       strings.TrimPrefix(base, "/"),
+		EncodingType: "",
+		MaxKeys:      1000,
+	}
+	// 是否为递归列出
+	if !recursive {
+		opt.Delimiter = "/"
+	}
+	// 手动补齐结尾的slash
+	if opt.Prefix != "" {
+		opt.Prefix += "/"
+	}
+
+	var (
+		marker  string
+		objects []cossdk.Object
+		commons []string
+	)
+
+	for {
+		res, _, err := handler.Client.Bucket.Get(ctx, opt)
+		if err != nil {
+			return nil, err
+		}
+		objects = append(objects, res.Contents...)
+		commons = append(commons, res.CommonPrefixes...)
+		// 如果本次未列取完，则继续使用marker获取结果
+		marker = res.NextMarker
+		// marker 为空时结果列取完毕，跳出
+		if marker == "" {
+			break
+		}
+	}
+
+	// 处理列取结果
+	res := make([]response.Object, 0, len(objects)+len(commons))
+	// 处理目录
+	for _, object := range commons {
+		rel, err := filepath.Rel(opt.Prefix, object)
+		if err != nil {
+			continue
+		}
+		res = append(res, response.Object{
+			Name:         path.Base(object),
+			RelativePath: filepath.ToSlash(rel),
+			Size:         0,
+			IsDir:        true,
+			LastModify:   time.Now(),
+		})
+	}
+	// 处理文件
+	for _, object := range objects {
+		rel, err := filepath.Rel(opt.Prefix, object.Key)
+		if err != nil {
+			continue
+		}
+		res = append(res, response.Object{
+			Name:         path.Base(object.Key),
+			Source:       object.Key,
+			RelativePath: filepath.ToSlash(rel),
+			Size:         uint64(object.Size),
+			IsDir:        false,
+			LastModify:   time.Now(),
+		})
+	}
+
+	return res, nil
+
 }
 
 // CORS 创建跨域策略
@@ -143,7 +220,34 @@ func (handler Driver) Delete(ctx context.Context, files []string) ([]string, err
 
 // Thumb 获取文件缩略图
 func (handler Driver) Thumb(ctx context.Context, path string) (*response.ContentResponse, error) {
-	return nil, errors.New("未实现")
+	var (
+		thumbSize = [2]uint{400, 300}
+		ok        = false
+	)
+	if thumbSize, ok = ctx.Value(fsctx.ThumbSizeCtx).([2]uint); !ok {
+		return nil, errors.New("无法获取缩略图尺寸设置")
+	}
+	thumbParam := fmt.Sprintf("imageMogr2/thumbnail/%dx%d", thumbSize[0], thumbSize[1])
+
+	source, err := handler.signSourceURL(
+		ctx,
+		path,
+		int64(model.GetIntSetting("preview_timeout", 60)),
+		&urlOption{},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	thumbURL, _ := url.Parse(source)
+	thumbQuery := thumbURL.Query()
+	thumbQuery.Add(thumbParam, "")
+	thumbURL.RawQuery = thumbQuery.Encode()
+
+	return &response.ContentResponse{
+		Redirect: true,
+		URL:      thumbURL.String(),
+	}, nil
 }
 
 // Source 获取外链URL

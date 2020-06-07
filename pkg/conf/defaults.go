@@ -13,6 +13,7 @@ var RedisConfig = &redis{
 var DatabaseConfig = &database{
 	Type:   "UNSET",
 	DBFile: "cloudreve.db",
+	Port:   3306,
 }
 
 // SystemConfig 系统公用配置
@@ -57,4 +58,10 @@ var ThumbConfig = &thumb{
 var SlaveConfig = &slave{
 	CallbackTimeout: 20,
 	SignatureTTL:    60,
+}
+
+var SSLConfig = &ssl{
+	Listen:   ":443",
+	CertPath: "",
+	KeyPath:  "",
 }

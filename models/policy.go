@@ -3,13 +3,16 @@ package model
 import (
 	"encoding/gob"
 	"encoding/json"
+	"net/url"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/HFO4/cloudreve/pkg/cache"
 	"github.com/HFO4/cloudreve/pkg/util"
 	"github.com/jinzhu/gorm"
-	"net/url"
-	"path"
-	"strconv"
-	"time"
 )
 
 // Policy 存储策略
@@ -46,6 +49,20 @@ type PolicyOption struct {
 
 	// OdRedirect Onedrive重定向地址
 	OdRedirect string `json:"od_redirect,omitempty"`
+
+	// Region 区域代码
+	Region string `json:"region"`
+}
+
+var thumbSuffix = map[string][]string{
+	"local":    {},
+	"qiniu":    {".psd", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"},
+	"oss":      {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"},
+	"cos":      {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"},
+	"upyun":    {".svg", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"},
+	"s3":       {},
+	"remote":   {},
+	"onedrive": {"*"},
 }
 
 func init() {
@@ -178,6 +195,17 @@ func (policy *Policy) IsDirectlyPreview() bool {
 	return policy.Type == "local"
 }
 
+// IsThumbExist 给定文件名，返回此存储策略下是否可能存在缩略图
+func (policy *Policy) IsThumbExist(name string) bool {
+	if list, ok := thumbSuffix[policy.Type]; ok {
+		if len(list) == 1 && list[0] == "*" {
+			return true
+		}
+		return util.ContainsString(list, strings.ToLower(filepath.Ext(name)))
+	}
+	return false
+}
+
 // IsTransitUpload 返回此策略上传给定size文件时是否需要服务端中转
 func (policy *Policy) IsTransitUpload(size uint64) bool {
 	if policy.Type == "local" {
@@ -199,9 +227,9 @@ func (policy *Policy) IsThumbGenerateNeeded() bool {
 	return policy.Type == "local"
 }
 
-// IsMockThumbNeeded 返回此策略是否需要在上传后默认当图像文件
-func (policy *Policy) IsMockThumbNeeded() bool {
-	return policy.Type == "onedrive"
+// CanStructureBeListed 返回存储策略是否能被前台列物理目录
+func (policy *Policy) CanStructureBeListed() bool {
+	return policy.Type != "local" && policy.Type != "remote"
 }
 
 // GetUploadURL 获取文件上传服务API地址

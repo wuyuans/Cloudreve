@@ -13,6 +13,7 @@ import (
 func SiteConfig(c *gin.Context) {
 	siteConfig := model.GetSettingByNames(
 		"siteName",
+		"siteICPId",
 		"login_captcha",
 		"reg_captcha",
 		"email_active",
@@ -23,6 +24,8 @@ func SiteConfig(c *gin.Context) {
 		"home_view_method",
 		"share_view_method",
 		"authn_enabled",
+		"captcha_IsUseReCaptcha",
+		"captcha_ReCaptchaKey",
 	)
 
 	// 如果已登录，则同时返回用户信息和标签

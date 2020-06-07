@@ -26,6 +26,11 @@ type FileHeaderMock struct {
 	testMock.Mock
 }
 
+func (m FileHeaderMock) List(ctx context.Context, path string, recursive bool) ([]response.Object, error) {
+	args := m.Called(ctx, path, recursive)
+	return args.Get(0).([]response.Object), args.Error(1)
+}
+
 func (m FileHeaderMock) Get(ctx context.Context, path string) (response.RSCloser, error) {
 	args := m.Called(ctx, path)
 	return args.Get(0).(response.RSCloser), args.Error(1)
